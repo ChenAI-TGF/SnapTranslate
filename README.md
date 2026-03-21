@@ -4,6 +4,10 @@
 
 **Entry point:** [`main.py`](main.py) — class `TranslatorApp`.
 
+![UI](image/ui.png)
+
+![Test](image/Test.png)
+
 ---
 
 ## Features (English)
@@ -98,6 +102,10 @@ Translation uses a **public Google Translate–style HTTP endpoint** (`translate
 | 源语言 | **`sl=auto`**，由接口自动识别（范围与 Google 翻译类服务相近）。 |
 | 目标语言 | 代码中固定为 **`zh-CN`（简体中文）**；其他语言需改 `translate()` 里的 `tl=`。 |
 | 性能 | 相同句子有缓存；网络请求带较短超时。 |
+
+![UI](image/ui.png)
+
+![Test](image/Test.png)
 
 ---
 
