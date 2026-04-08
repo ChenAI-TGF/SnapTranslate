@@ -1,0 +1,7 @@
+# secrets
+api_key.txt
+
+# python cache
+__pycache__/
+*.pyc
+

@@ -1,2 +1,9 @@
+# SnapTranslate — Python 依赖
+# 安装: pip install -r requirements.txt
+
+# main.py — 剪贴板、HTTP 翻译
 pyperclip>=1.8.2
 requests>=2.31.0
+
+# vocab_review.py — DeepSeek API（OpenAI 兼容协议）
+openai>=1.40.0

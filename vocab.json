@@ -1,0 +1,402 @@
+[
+  {
+    "word": "urban",
+    "meaning": "城市的",
+    "example": "Living in an urban environment offers access to cultural events and diverse dining options.",
+    "example_zh": "生活在城市环境中可以接触到文化活动并享受多样化的餐饮选择。",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "was prone to",
+    "meaning": "很容易",
+    "example": "He was prone to making careless mistakes when he was tired.",
+    "example_zh": "他疲惫时很容易犯粗心的错误。",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "theft",
+    "meaning": "盗窃",
+    "example": "The store installed security cameras to prevent theft.",
+    "example_zh": "这家商店安装了监控摄像头来防止盗窃。",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "profitable",
+    "meaning": "有利可图",
+    "example": "The new marketing strategy proved to be highly profitable for the company.",
+    "example_zh": "新的营销策略被证明对公司非常有利可图。",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "pivotal",
+    "meaning": "关键的",
+    "example": "Her support was pivotal in securing the funding for the project.",
+    "example_zh": "她的支持对于确保该项目获得资金至关重要。",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "proposed",
+    "meaning": "建议的",
+    "example": "The proposed changes to the policy will be discussed at the next meeting.",
+    "example_zh": "对政策的建议修改将在下次会议上讨论。",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "calculations",
+    "meaning": "计算",
+    "example": "The engineer's precise calculations ensured the bridge's structural integrity.",
+    "example_zh": "工程师精确的计算确保了桥梁的结构完整性。",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "Nevertheless",
+    "meaning": "尽管如此",
+    "example": "The weather was terrible; nevertheless, they decided to go ahead with the picnic.",
+    "example_zh": "天气很糟糕；尽管如此，他们还是决定继续进行野餐。",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "glorious",
+    "meaning": "辉煌",
+    "example": "The sunset over the ocean was a truly glorious sight, painting the sky in shades of orange and purple.",
+    "example_zh": "海上的日落真是一幅辉煌的景象，将天空染成了橙色和紫色。",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "decisive",
+    "meaning": "决定性",
+    "example": "Her decisive action in the crisis prevented a major disaster.",
+    "example_zh": "她在危机中采取的果断行动避免了一场重大灾难。",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "filed for",
+    "meaning": "申请",
+    "example": "After years of struggling with debt, the company finally filed for bankruptcy last month.",
+    "example_zh": "在经历了多年的债务困境后，该公司终于在上个月申请了破产。",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "patent",
+    "meaning": "专利",
+    "example": "The company filed a patent for its innovative solar panel technology to protect its intellectual property.",
+    "example_zh": "该公司为其创新的太阳能电池板技术申请了专利，以保护其知识产权。",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "explanation",
+    "meaning": "解释",
+    "example": "Could you give me a brief explanation of how this software works?",
+    "example_zh": "你能给我简单解释一下这个软件是如何运作的吗？",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "get off the ground",
+    "meaning": "离开地面",
+    "example": "The new startup struggled to get off the ground due to a lack of initial funding.",
+    "example_zh": "这家新创公司因缺乏启动资金而难以起步。",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "struggled to",
+    "meaning": "努力",
+    "example": "She struggled to keep her composure during the emotional farewell.",
+    "example_zh": "她在感人的告别仪式上努力保持镇定。",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "initiatives",
+    "meaning": "倡议",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "in general",
+    "meaning": "一般来说",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "withdrew",
+    "meaning": "退出",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "fairy-tale",
+    "meaning": "童话般的",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "gallant",
+    "meaning": "英勇",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "isn't aware of it",
+    "meaning": "不知道",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "capacity for creativity",
+    "meaning": "创造力",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "repercussions",
+    "meaning": "反响",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "in favour of",
+    "meaning": "赞成",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "pretence",
+    "meaning": "虚伪",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "settle down with",
+    "meaning": "安顿下来",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "human species",
+    "meaning": "人类",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "underpins",
+    "meaning": "支撑",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "intellectual",
+    "meaning": "知识分子",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "crucial",
+    "meaning": "至关重要的",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "millennia",
+    "meaning": "千年",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "philosopher",
+    "meaning": "哲学家",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "extolled",
+    "meaning": "颂扬的",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "virtues",
+    "meaning": "美德",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "is mindful of",
+    "meaning": "注意到",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "curtailed",
+    "meaning": "减少的",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "perceptions",
+    "meaning": "看法",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "victims",
+    "meaning": "受害者",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "emphasis",
+    "meaning": "强调",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "policies",
+    "meaning": "政策",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "concerned with",
+    "meaning": "关心",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "implications",
+    "meaning": "影响",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "base policies on",
+    "meaning": "政策依据",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "on the rest of",
+    "meaning": "其余的",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "intervened",
+    "meaning": "介入",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "indicator",
+    "meaning": "指标",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "trivial",
+    "meaning": "琐碎的",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "contrasts with",
+    "meaning": "对比于",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "fundamental",
+    "meaning": "基本的",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "cliffs",
+    "meaning": "悬崖",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  }
+]
