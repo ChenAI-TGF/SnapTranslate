@@ -2,6 +2,8 @@
 
 Windows 下的**划词翻译**、**本地生词本**与**复习 / DeepSeek 例句生成**小工具。
 
+![SnapTranslate logo](image/logo.png)
+
 ---
 
 # 中文版
