@@ -220,8 +220,11 @@ pip install -r requirements.txt
 ---
 
 ## 1) Select-to-Translate & Vocabulary Capture (`main.py`)
+![SnapTranslate logo](image/1.png)
+![SnapTranslate logo](image/7.png)
 
 ### Global Hotkeys & Translation
+
 
 - Default hotkeys:
   - `Ctrl + L`: translate selected text to Simplified Chinese
@@ -264,7 +267,7 @@ Two forms are available:
 Both use the same vocabulary file (`vocab.json` by default), with the same scoring logic and DeepSeek example generation.
 
 ### A. Desktop Review (`vocab_review.py`)
-
+![SnapTranslate logo](image/2.png)
 #### Review & Scoring
 
 - Study order: random / low score first / high score first
@@ -297,7 +300,8 @@ Both use the same vocabulary file (`vocab.json` by default), with the same scori
 ---
 
 ### B. Web Review (`vocab_review_web.py`)
-
+![SnapTranslate logo](image/3.png)
+![SnapTranslate logo](image/4.png)
 #### Core Review
 
 - Same scoring and sorting logic as desktop
@@ -325,6 +329,7 @@ Both use the same vocabulary file (`vocab.json` by default), with the same scori
 ---
 
 ## 3) Vocabulary Admin Panel (`set.py`)
+![SnapTranslate logo](image/5.png)
 
 Local desktop management window (Tkinter), titled **词表后台管理功能**.
 
