@@ -27,6 +27,7 @@ pip install -r requirements.txt
 ## 一、划词翻译与生词记录（`main.py`）
 
 ![SnapTranslate logo](image/1.png)
+![SnapTranslate logo](image/7.png)
 
 ### 1) 全局热键与翻译
 
