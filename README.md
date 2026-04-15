@@ -189,3 +189,184 @@ pip install -r requirements.txt
 
 翻译与大模型接口（Google / MyMemory / DeepSeek）受网络、额度、服务策略影响。  
 本项目主要用于学习与个人效率提升，请自行评估合规与费用风险。
+
+---
+
+# English Version
+
+## Overview
+
+SnapTranslate is a local toolkit for English learning, including:
+
+1. Select-to-translate + vocabulary capture  
+2. Vocabulary review (Desktop + Web)  
+3. Vocabulary admin panel
+
+---
+
+## Quick Start
+
+```powershell
+cd path\to\SnapTranslate
+pip install -r requirements.txt
+```
+
+- Select-to-translate (Desktop): `python main.py`
+- Vocabulary review (Desktop): `python vocab_review.py`
+- Vocabulary review (Web): `streamlit run vocab_review_web.py`
+- Vocabulary admin panel (Desktop): `python reset_vocab_scores.py`
+
+---
+
+## 1) Select-to-Translate & Vocabulary Capture (`main.py`)
+
+### Global Hotkeys & Translation
+
+- Default hotkeys:
+  - `Ctrl + L`: translate selected text to Simplified Chinese
+  - `Tab + Q`: screenshot OCR translation
+  - `Tab + E`: save latest translation to vocabulary
+- Custom hotkeys are supported in the main UI (examples: `ctrl+l`, `tab+q`)
+- Hotkey settings are persisted in `main_settings.json` and reused on next launch
+- Translation backends: `Google` / `MyMemory`
+- Built-in retry, timeout and cache for unstable network conditions
+
+### UI & Interaction
+
+- Main window shows translation logs, status bar, and latest 3 results
+- Optional floating popup near cursor for source/translation display
+- Latest 3 results can be saved directly into `vocab.json`
+- “Recently added to vocabulary” list supports one-click delete
+- Supports clearing logs
+
+### Read Aloud & Volume
+
+- Auto read-aloud for likely-English source text
+- App-level TTS volume (0~100), independent from system volume
+- Volume is persisted in `main_settings.json`
+
+### Data & Backups
+
+- Saved vocabulary fields: `word/meaning/example/example_zh/score/reviews`
+- Auto backup of `vocab.json` on startup to `backups/`
+- Backup filename includes readable time + item count
+
+---
+
+## 2) Vocabulary Review
+
+Two forms are available:
+
+- Desktop: `vocab_review.py`
+- Web: `vocab_review_web.py`
+
+Both use the same vocabulary file (`vocab.json` by default), with the same scoring logic and DeepSeek example generation.
+
+### A. Desktop Review (`vocab_review.py`)
+
+#### Review & Scoring
+
+- Study order: random / low score first / high score first
+- Three separate display buttons:
+  - show/hide meaning
+  - show/hide example
+  - show/hide example translation (visible only after example is shown)
+- Self-rating buttons: Know / Vague / Don’t know
+- Score is clamped to 0~100, `reviews` auto-increments
+
+#### Read-Aloud (System Voice)
+
+- Auto modes:
+  - Off
+  - Word only
+  - Word + example (example is read only after clicking “show example”)
+- Manual replay button is retained
+- TTS volume is app-level and persisted (`vocab_review_settings.json`)
+
+#### DeepSeek Batch Generation
+
+- One-click fill missing `example` / `example_zh`
+- If no local key exists, clicking generate opens an input dialog and saves to `api_key.txt`
+- Stops with warning on insufficient balance (402)
+
+#### Startup Backup
+
+- Automatically backs up `vocab.json` on startup
+
+---
+
+### B. Web Review (`vocab_review_web.py`)
+
+#### Core Review
+
+- Same scoring and sorting logic as desktop
+- Same 3-button reveal flow (meaning / example / example translation)
+- Vocabulary path can be changed and reloaded in page
+- Page title is `SnapTranslate`; word display removes `x/y` prefix and uses larger font
+
+#### Read-Aloud (Browser Voice)
+
+- Auto modes (below scoring area):
+  - Off
+  - Word only
+  - Word + example (example is read only after clicking “show example”)
+- Manual buttons:
+  - Read word
+  - Read example
+
+> Note: Web TTS relies on browser `speechSynthesis`; on some mobile browsers autoplay policies may block sound.
+
+#### DeepSeek & Backup
+
+- Supports DeepSeek batch completion (from `api_key.txt` or in-page input save)
+- Auto backup on startup to `backups/`
+
+---
+
+## 3) Vocabulary Admin Panel (`set.py`)
+
+Local desktop management window (Tkinter), titled **词表后台管理功能**.
+
+### Status
+
+- Total vocabulary items
+- Items with example + translation
+- Items pending examples
+- Backup file count
+- Latest backup filename
+
+### Actions
+
+- `词表评分重置系统`: reset all items to `score=50`, `reviews=0`
+- `删除备份（仅保留最新1个）`: delete old backups, keep latest one
+- Both actions have confirmation dialogs to avoid accidental operations
+
+---
+
+## Project Structure
+
+| File | Purpose |
+|------|---------|
+| [`main.py`](main.py) | Select-to-translate + OCR + vocabulary capture |
+| [`vocab_review.py`](vocab_review.py) | Desktop vocabulary review |
+| [`vocab_review_web.py`](vocab_review_web.py) | Web vocabulary review |
+| [`set.py`](reset_vocab_scores.py) | Desktop vocabulary admin panel |
+| [`vocab.json`](vocab.json) | Vocabulary data |
+| [`api_key.txt`](api_key.txt) | Optional DeepSeek API key |
+| [`backups/`](backups/) | Auto backup directory |
+| [`requirements.txt`](requirements.txt) | Dependencies |
+
+---
+
+## Requirements
+
+- Python 3.10+
+- Windows (desktop hotkeys / OCR / system voice scenarios)
+- Dependencies listed in `requirements.txt`
+
+---
+
+## Disclaimer
+
+Translation and LLM services (Google / MyMemory / DeepSeek) are affected by network, quota and provider policies.  
+This project is mainly for learning and personal productivity; please evaluate compliance and cost risks yourself.
