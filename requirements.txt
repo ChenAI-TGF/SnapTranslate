@@ -4,6 +4,11 @@
 # main.py — 剪贴板、HTTP 翻译
 pyperclip>=1.8.2
 requests>=2.31.0
+pillow>=10.0.0
+pytesseract>=0.3.10
 
 # vocab_review.py — DeepSeek API（OpenAI 兼容协议）
 openai>=1.40.0
+
+# vocab_review_web.py — Streamlit 网页版复习
+streamlit>=1.33.0

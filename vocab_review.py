@@ -10,15 +10,18 @@ import json
 import os
 import random
 import re
+import shutil
 import subprocess
 import threading
 import time
 import tkinter as tk
-from tkinter import filedialog, font as tkfont, messagebox, scrolledtext
+from tkinter import filedialog, font as tkfont, messagebox, scrolledtext, simpledialog
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_VOCAB = os.path.join(SCRIPT_DIR, "vocab.json")
 DEFAULT_KEY_FILE = os.path.join(SCRIPT_DIR, "api_key.txt")
+DEFAULT_SETTINGS_FILE = os.path.join(SCRIPT_DIR, "vocab_review_settings.json")
+BACKUP_DIR = os.path.join(SCRIPT_DIR, "backups")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
 
@@ -157,31 +160,36 @@ class VocabReviewApp:
     def __init__(self) -> None:
         self.vocab_path = DEFAULT_VOCAB
         self.key_path = DEFAULT_KEY_FILE
+        self.settings_path = DEFAULT_SETTINGS_FILE
         self.vocab: list[dict] = load_vocab(self.vocab_path)
         normalize_vocab_scores(self.vocab)
         self.order: list[int] = []
         self.pos = 0
-        self.reveal_meaning = False
+        self.show_meaning = False
+        self.show_example = False
+        self.show_example_zh = False
         self._gen_running = False
         self._speak_generation = 0
+        self._tts_volume_default = self._load_tts_volume()
 
         self.root = tk.Tk()
         self.root.title("SnapTranslate — 生词复习")
-        self.root.geometry("680x640")
-        self.root.minsize(560, 480)
+        self.root.geometry("680x700")
+        self.root.minsize(560, 520)
         self.root.configure(bg=UI_BG)
 
         # Tk 变量必须在 root 创建之后绑定，否则会 RuntimeError: Too early to create variable
         # 顺序：random | score_asc | score_desc
         self.sort_mode_var = tk.StringVar(master=self.root, value="random")
-        self.api_key_var = tk.StringVar(master=self.root, value=read_api_key_file(self.key_path) or "")
         self.status_var = tk.StringVar(master=self.root, value="就绪")
         self.word_var = tk.StringVar(master=self.root, value="")
-        self.meaning_var = tk.StringVar(master=self.root, value="（点击「显示释义 / 例句」）")
+        self.meaning_var = tk.StringVar(master=self.root, value="（点击按钮显示释义/例句）")
         self.progress_var = tk.StringVar(master=self.root, value="0 / 0")
         self.score_var = tk.StringVar(master=self.root, value="熟练度 —")
         # 朗读：none | word | word_example
         self.read_mode_var = tk.StringVar(master=self.root, value="none")
+        self.tts_volume_var = tk.IntVar(master=self.root, value=self._tts_volume_default)
+        self.tts_volume_var.trace_add("write", self._on_tts_volume_change)
 
         self._build_ui()
         self._rebuild_order()
@@ -255,43 +263,6 @@ class VocabReviewApp:
             cursor="hand2",
         ).pack(side="right", padx=(8, 0))
 
-        key_row = tk.Frame(settings, bg=UI_CARD)
-        key_row.pack(fill="x", pady=(0, 8))
-        tk.Label(
-            key_row, text="DeepSeek API Key", bg=UI_CARD, fg=UI_TEXT_MUTED, font=tkfont.Font(family=FONT_FAMILY, size=9)
-        ).pack(anchor="w")
-        key_inner = tk.Frame(key_row, bg=UI_CARD)
-        key_inner.pack(fill="x", pady=(4, 0))
-        ent = tk.Entry(
-            key_inner,
-            textvariable=self.api_key_var,
-            show="*",
-            font=tkfont.Font(family="Consolas", size=10),
-            bg=UI_LOG_BG,
-            fg=UI_TEXT,
-            insertbackground=UI_TEXT,
-            relief="solid",
-            borderwidth=1,
-            highlightthickness=0,
-        )
-        ent.pack(side="left", fill="x", expand=True, ipady=6)
-        tk.Button(
-            key_inner,
-            text="保存到文件",
-            command=self._save_key_clicked,
-            font=tkfont.Font(family=FONT_FAMILY, size=9),
-            bg=UI_CARD,
-            fg=UI_ACCENT,
-            activebackground=UI_CHIP,
-            activeforeground=UI_ACCENT_HOVER,
-            relief="solid",
-            borderwidth=1,
-            highlightthickness=0,
-            padx=12,
-            pady=6,
-            cursor="hand2",
-        ).pack(side="right", padx=(8, 0))
-
         sort_row = tk.Frame(settings, bg=UI_CARD)
         sort_row.pack(fill="x", pady=(4, 4))
         tk.Label(
@@ -348,6 +319,46 @@ class VocabReviewApp:
                 **rb_kw,
             ).pack(side="left", padx=(0, 14))
 
+        tts_row = tk.Frame(settings, bg=UI_CARD)
+        tts_row.pack(fill="x", pady=(10, 0))
+        tk.Label(
+            tts_row,
+            text="朗读音量（独立于系统音量）",
+            bg=UI_CARD,
+            fg=UI_TEXT_MUTED,
+            font=tkfont.Font(family=FONT_FAMILY, size=9),
+        ).pack(anchor="w")
+        tk.Scale(
+            tts_row,
+            from_=0,
+            to=100,
+            orient="horizontal",
+            variable=self.tts_volume_var,
+            resolution=1,
+            showvalue=True,
+            bg=UI_CARD,
+            fg=UI_TEXT,
+            troughcolor=UI_LOG_BG,
+            highlightthickness=0,
+            length=260,
+        ).pack(anchor="w", pady=(4, 0))
+        tk.Button(
+            tts_row,
+            text="手动重读当前词条",
+            command=self._manual_speak_current,
+            font=tkfont.Font(family=FONT_FAMILY, size=9),
+            bg=UI_CARD,
+            fg=UI_ACCENT,
+            activebackground=UI_CHIP,
+            activeforeground=UI_ACCENT_HOVER,
+            relief="solid",
+            borderwidth=1,
+            highlightthickness=0,
+            padx=10,
+            pady=4,
+            cursor="hand2",
+        ).pack(anchor="w", pady=(6, 0))
+
         card = tk.Frame(
             outer,
             bg=UI_CARD,
@@ -385,20 +396,24 @@ class VocabReviewApp:
             justify="center",
         ).pack(pady=(8, 12))
 
-        tk.Button(
-            card,
-            text="显示释义 / 例句",
-            command=self._toggle_reveal,
+        reveal_row = tk.Frame(card, bg=UI_CARD)
+        reveal_row.pack(fill="x", pady=(0, 8))
+        btn_kw = dict(
             font=tkfont.Font(family=FONT_FAMILY, size=10),
             bg=UI_CHIP,
             fg=UI_ACCENT,
             activebackground=UI_ACCENT,
             activeforeground="#ffffff",
             relief="flat",
-            padx=18,
+            padx=14,
             pady=8,
             cursor="hand2",
-        ).pack(pady=(0, 8))
+        )
+        self.meaning_btn = tk.Button(reveal_row, text="显示/隐藏释义", command=self._toggle_meaning, **btn_kw)
+        self.meaning_btn.pack(side="left")
+        self.example_btn = tk.Button(reveal_row, text="显示/隐藏例句", command=self._toggle_example, **btn_kw)
+        self.example_btn.pack(side="left", padx=(8, 0))
+        self.example_zh_btn = tk.Button(reveal_row, text="显示/隐藏例句翻译", command=self._toggle_example_zh, **btn_kw)
 
         tk.Label(
             card,
@@ -434,6 +449,7 @@ class VocabReviewApp:
         self.example_text.tag_configure("zh_line", foreground=UI_ZH)
         self.example_text.tag_configure("muted", foreground=UI_TEXT_MUTED)
         self.example_text.pack(fill="x")
+        self._refresh_reveal_ui()
 
         sep = tk.Frame(card, bg=UI_BORDER, height=1)
         sep.pack(fill="x", pady=(14, 10))
@@ -551,26 +567,48 @@ class VocabReviewApp:
         normalize_vocab_scores(self.vocab)
         self._rebuild_order()
         self.pos = 0
-        self.reveal_meaning = False
+        self.show_meaning = False
+        self.show_example = False
+        self.show_example_zh = False
         self._refresh_gen_button_label()
         self._show_card()
-        self._log(f"已加载词表：{self.vocab_path}（{len(self.vocab)} 条）")
 
-    def _save_key_clicked(self) -> None:
-        key = self.api_key_var.get().strip()
-        if not key:
-            messagebox.showwarning("提示", "请先填写 API Key。")
-            return
+    def _load_tts_volume(self) -> int:
         try:
-            write_api_key_file(self.key_path, key)
-            messagebox.showinfo("成功", f"已保存到 {self.key_path}")
-        except Exception as e:
-            messagebox.showerror("失败", str(e))
+            with open(self.settings_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            v = int(data.get("tts_volume", 100))
+        except Exception:
+            v = 100
+        return max(0, min(100, v))
+
+    def _save_tts_volume(self, volume: int) -> None:
+        v = max(0, min(100, int(volume)))
+        payload = {"tts_volume": v}
+        tmp = self.settings_path + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, self.settings_path)
+        except Exception:
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except Exception:
+                pass
+
+    def _on_tts_volume_change(self, *_: object) -> None:
+        try:
+            self._save_tts_volume(int(self.tts_volume_var.get()))
+        except (tk.TclError, TypeError, ValueError):
+            return
 
     def _on_sort_mode_change(self) -> None:
         self._rebuild_order()
         self.pos = 0
-        self.reveal_meaning = False
+        self.show_meaning = False
+        self.show_example = False
+        self.show_example_zh = False
         self._show_card()
 
     def _rebuild_order(self) -> None:
@@ -595,14 +633,17 @@ class VocabReviewApp:
         return self.vocab[idx]
 
     @staticmethod
-    def _speak_english_blocking(text: str, timeout_sec: float = 120.0) -> None:
+    def _speak_text_blocking(text: str, timeout_sec: float = 120.0, volume: int = 100, prefer_en: bool = True) -> None:
         if not (text and str(text).strip()):
             return
+        vol = max(0, min(100, int(volume)))
         escaped = str(text).replace("'", "''")
+        voice_filter = "en-*" if prefer_en else "zh-*"
         script = (
             "Add-Type -AssemblyName System.Speech; "
             "$s=New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-            "$voice=$s.GetInstalledVoices() | Where-Object {$_.VoiceInfo.Culture.Name -like 'en-*'} | Select-Object -First 1; "
+            f"$s.Volume={vol}; "
+            f"$voice=$s.GetInstalledVoices() | Where-Object {{$_.VoiceInfo.Culture.Name -like '{voice_filter}'}} | Select-Object -First 1; "
             "if($voice){$s.SelectVoice($voice.VoiceInfo.Name)}; "
             f"$s.Speak('{escaped}')"
         )
@@ -625,6 +666,7 @@ class VocabReviewApp:
             return
         word = str(it.get("word", "")).strip()
         ex = str(it.get("example", "") or "").strip()
+        volume = int(self.tts_volume_var.get()) if hasattr(self, "tts_volume_var") else 100
         self._speak_generation += 1
         gen = self._speak_generation
 
@@ -633,26 +675,28 @@ class VocabReviewApp:
                 if gen != self._speak_generation:
                     return
                 if word:
-                    self._speak_english_blocking(word)
+                    self._speak_text_blocking(word, volume=volume, prefer_en=True)
                 return
             if mode == "word_example":
                 if gen != self._speak_generation:
                     return
                 if word:
-                    self._speak_english_blocking(word, timeout_sec=60.0)
-                if gen != self._speak_generation:
-                    return
-                if ex:
-                    self._speak_english_blocking(ex, timeout_sec=120.0)
+                    self._speak_text_blocking(word, timeout_sec=60.0, volume=volume, prefer_en=True)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _manual_speak_current(self) -> None:
+        it = self._current_item()
+        if not it:
+            return
+        self._maybe_speak_for_card(it)
 
     def _apply_grade(self, grade: str) -> None:
         """grade: know | vague | unknown"""
         it = self._current_item()
         if not it:
             return
-        revealed = bool(self.reveal_meaning)
+        revealed = bool(self.show_meaning or self.show_example or self.show_example_zh)
         delta = GRADE_DELTA.get((grade, revealed))
         if delta is None:
             return
@@ -682,7 +726,9 @@ class VocabReviewApp:
         except ValueError:
             new_pos = 0
         self.pos = (new_pos + 1) % n
-        self.reveal_meaning = False
+        self.show_meaning = False
+        self.show_example = False
+        self.show_example_zh = False
         self._show_card()
 
     def _clear_example_display(self) -> None:
@@ -721,6 +767,9 @@ class VocabReviewApp:
 
         self.example_text.configure(state="normal")
         self.example_text.delete("1.0", "end")
+        if not self.show_example:
+            self.example_text.configure(state="disabled")
+            return
         if not exs and not zhs:
             self.example_text.insert("end", "例句：（暂无）", ("muted",))
         else:
@@ -729,9 +778,16 @@ class VocabReviewApp:
                 self._insert_text_with_keyword_bold(self.example_text, exs, word_kw)
             else:
                 self.example_text.insert("end", "（暂无）", ("muted",))
-            self.example_text.insert("end", "\n例句（译）：", ("zh_line",))
-            self.example_text.insert("end", zhs if zhs else "（暂无）", ("zh_line",))
+            if self.show_example_zh:
+                self.example_text.insert("end", "\n例句（译）：", ("zh_line",))
+                self.example_text.insert("end", zhs if zhs else "（暂无）", ("zh_line",))
         self.example_text.configure(state="disabled")
+
+    def _refresh_reveal_ui(self) -> None:
+        if self.show_example:
+            self.example_zh_btn.pack(side="left", padx=(8, 0))
+        else:
+            self.example_zh_btn.pack_forget()
 
     def _show_card(self) -> None:
         n = len(self.vocab)
@@ -751,26 +807,90 @@ class VocabReviewApp:
         self.score_var.set(f"熟练度 {sc:.1f} / {SCORE_MAX:.0f}（已评 {rev} 次）")
         word = str(it.get("word", ""))
         self.word_var.set(word)
-        self.reveal_meaning = False
-        self.meaning_var.set("（点击「显示释义 / 例句」）")
+        self.show_meaning = False
+        self.show_example = False
+        self.show_example_zh = False
+        self.meaning_var.set("（点击按钮显示释义/例句）")
+        self._refresh_reveal_ui()
         self._clear_example_display()
         self._maybe_speak_for_card(it)
 
-    def _toggle_reveal(self) -> None:
+    def _toggle_meaning(self) -> None:
         it = self._current_item()
         if not it:
             return
-        self.reveal_meaning = not self.reveal_meaning
-        if self.reveal_meaning:
+        self.show_meaning = not self.show_meaning
+        if self.show_meaning:
             self.meaning_var.set(f"释义：{it.get('meaning', '')}")
-            self._render_example_display(it)
         else:
             self.meaning_var.set("（已隐藏，再次点击显示）")
-            self._clear_example_display()
+        self._render_example_display(it)
+
+    def _toggle_example(self) -> None:
+        it = self._current_item()
+        if not it:
+            return
+        was_showing = self.show_example
+        self.show_example = not self.show_example
+        if not self.show_example:
+            self.show_example_zh = False
+        self._refresh_reveal_ui()
+        self._render_example_display(it)
+        if (not was_showing) and self.show_example and self.read_mode_var.get() == "word_example":
+            ex = str(it.get("example", "") or "").strip()
+            if ex:
+                volume = int(self.tts_volume_var.get()) if hasattr(self, "tts_volume_var") else 100
+                threading.Thread(
+                    target=self._speak_text_blocking,
+                    args=(ex,),
+                    kwargs={"timeout_sec": 120.0, "volume": volume, "prefer_en": True},
+                    daemon=True,
+                ).start()
+
+    def _toggle_example_zh(self) -> None:
+        it = self._current_item()
+        if not it or not self.show_example:
+            return
+        self.show_example_zh = not self.show_example_zh
+        self._render_example_display(it)
 
     def _refresh_gen_button_label(self) -> None:
         empty_n = count_pending_examples(self.vocab)
         self.gen_btn.configure(text=f"用 DeepSeek 生成英例句 + 中译（约 {empty_n} 条待补全）")
+
+    def _prompt_and_save_api_key(self) -> str | None:
+        key = simpledialog.askstring(
+            "配置 DeepSeek API Key",
+            "首次使用需要配置 DeepSeek API Key。\n请输入后将保存到本地 api_key.txt：",
+            parent=self.root,
+            show="*",
+        )
+        if key is None:
+            return None
+        key = key.strip()
+        if not key:
+            messagebox.showwarning("提示", "API Key 不能为空。")
+            return None
+        try:
+            write_api_key_file(self.key_path, key)
+        except Exception as e:
+            messagebox.showerror("保存失败", str(e))
+            return None
+        return key
+
+    def _backup_vocab_on_startup(self) -> tuple[bool, str]:
+        if not os.path.isfile(self.vocab_path):
+            return False, "未找到 vocab.json，跳过备份"
+        count = len(self.vocab) if isinstance(self.vocab, list) else 0
+        stamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+        backup_name = f"vocab_backup_{stamp}_entries-{count}.json"
+        backup_path = os.path.join(BACKUP_DIR, backup_name)
+        try:
+            shutil.copy2(self.vocab_path, backup_path)
+        except Exception as exc:
+            return False, f"备份失败：{exc}"
+        return True, backup_path
 
     def _get_client(self):
         try:
@@ -781,10 +901,11 @@ class VocabReviewApp:
                 "请先安装：pip install openai\n然后重新运行本程序。",
             )
             return None
-        key = self.api_key_var.get().strip() or (read_api_key_file(self.key_path) or "")
+        key = read_api_key_file(self.key_path) or ""
         if not key:
-            messagebox.showwarning("提示", "请先填写 DeepSeek API Key，或写入 api_key.txt。")
-            return None
+            key = self._prompt_and_save_api_key() or ""
+            if not key:
+                return None
         return OpenAI(api_key=key, base_url=DEEPSEEK_BASE_URL)
 
     def _call_example_bilingual(self, client, word: str, meaning: str) -> tuple[str, str]:
@@ -870,7 +991,9 @@ class VocabReviewApp:
         self.gen_btn.configure(state="normal")
         self._refresh_gen_button_label()
         self.status_var.set(f"完成：成功 {ok} / 计划 {total}")
-        self.reveal_meaning = False
+        self.show_meaning = False
+        self.show_example = False
+        self.show_example_zh = False
         self._show_card()
         if stop_reason:
             messagebox.showwarning(
@@ -881,13 +1004,13 @@ class VocabReviewApp:
             messagebox.showinfo("完成", f"例句生成结束。\n成功写入：{ok} / 本次任务：{total}")
 
     def run(self) -> None:
-        # 启动时若文件里有 key 而输入框空，同步到界面（界面已用 read 初始化，此处仅刷新按钮计数）
+        ok, detail = self._backup_vocab_on_startup()
         self._refresh_gen_button_label()
-        if not self.api_key_var.get().strip():
-            file_key = read_api_key_file(self.key_path)
-            if file_key:
-                self.api_key_var.set(file_key)
         n = len(self.vocab)
+        if ok:
+            self._log(f"启动备份已创建：{detail}")
+        else:
+            self._log(detail)
         self._log(
             f"已加载 {self.vocab_path}，共 {n} 条；待生成/待补全（英或中译）约 {count_pending_examples(self.vocab)} 条。"
         )
