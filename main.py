@@ -7,7 +7,8 @@ import subprocess
 import threading
 import time
 import tkinter as tk
-from functools import lru_cache
+from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from ctypes import wintypes
 from tkinter import font as tkfont
 from tkinter import scrolledtext
@@ -42,10 +43,43 @@ COPY_DELAY_SEC = 0.06
 CLIPBOARD_STABLE_WAIT = 0.03
 MAX_TEXT_LENGTH = 120
 
-# 翻译请求：弱网/跨境链路易超时，略拉长并做有限次重试
-TRANSLATE_RETRIES = 3
-TRANSLATE_TIMEOUT = (12, 30)  # (连接超时秒数, 读取超时秒数)
+# 翻译请求：连接阶段过长会让界面“卡住”；失败后会自动尝试 MyMemory
+TRANSLATE_RETRIES = 2
+TRANSLATE_TIMEOUT = (6, 22)  # (连接超时秒数, 读取超时秒数)
+
+# Lingva：开源 Google 翻译前端；多实例并发，谁先可用用谁（部分实例在国内可能 403）
+LINGVA_BASES: tuple[str, ...] = (
+    "https://lingva.ml",
+    "https://translate.plausibility.cloud",
+)
+
+# 仅缓存「确有译文」的结果，避免把“(无翻译结果)”或偶发空结果钉死
+_TRANS_OK_CACHE: OrderedDict[tuple[str, str], str] = OrderedDict()
+_TRANS_OK_CACHE_MAX = 2048
+
+
+def _cache_translate_get(engine: str, text: str) -> str | None:
+    key = (engine, text)
+    if key not in _TRANS_OK_CACHE:
+        return None
+    _TRANS_OK_CACHE.move_to_end(key)
+    return _TRANS_OK_CACHE[key]
+
+
+def _cache_translate_put(engine: str, text: str, result: str) -> None:
+    if not result or result == "(无翻译结果)":
+        return
+    key = (engine, text)
+    _TRANS_OK_CACHE[key] = result
+    _TRANS_OK_CACHE.move_to_end(key)
+    while len(_TRANS_OK_CACHE) > _TRANS_OK_CACHE_MAX:
+        _TRANS_OK_CACHE.popitem(last=False)
 OCR_LANG = "eng+chi_sim"
+# OCR 内存保护：截图区域过大时先降采样，降低峰值内存与 Tesseract 压力
+OCR_MAX_PIXELS = 2_400_000
+# 截图遮罩：过低 alpha 在 Win32 上易被合成器“吃没”；映射后再设一次更稳定
+SNIP_OVERLAY_ALPHA = 0.5
+SNIP_OVERLAY_CANVAS_BG = "#0f172a"
 TESSERACT_CANDIDATE_DIRS = (
     r"C:\Program Files\Tesseract-OCR",
     r"C:\Program Files (x86)\Tesseract-OCR",
@@ -65,9 +99,11 @@ HTTP_HEADERS = {
 }
 
 
-@lru_cache(maxsize=2048)
 def _translate_google_gtx(text: str) -> str:
     """Google 公开 gtx 接口，质量较好，国内常需可访问 Google 的网络。"""
+    hit = _cache_translate_get("google", text)
+    if hit is not None:
+        return hit
     encoded = quote(text)
     url = (
         "https://translate.googleapis.com/translate_a/single"
@@ -79,7 +115,10 @@ def _translate_google_gtx(text: str) -> str:
             resp.raise_for_status()
             data = json.loads(resp.text)
             translated = "".join(part[0] for part in data[0] if part and part[0])
-            return translated.strip() if translated.strip() else "(无翻译结果)"
+            out = translated.strip() if translated.strip() else "(无翻译结果)"
+            if out != "(无翻译结果)":
+                _cache_translate_put("google", text, out)
+            return out
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
             if attempt + 1 < TRANSLATE_RETRIES:
                 time.sleep(0.75 * (attempt + 1))
@@ -106,12 +145,14 @@ def _mymemory_langpairs(text: str) -> tuple[str, ...]:
     return ("Autodetect|zh-CN", "en|zh-CN")
 
 
-@lru_cache(maxsize=2048)
 def _translate_mymemory(text: str) -> str:
     """
     MyMemory Translated.net 免费接口：无需 API Key，国内多数网络可直连。
     有每日免费额度，超限会在译文里返回提示文案。
     """
+    hit = _cache_translate_get("mymemory", text)
+    if hit is not None:
+        return hit
     for langpair in _mymemory_langpairs(text):
         for attempt in range(TRANSLATE_RETRIES):
             try:
@@ -124,6 +165,7 @@ def _translate_mymemory(text: str) -> str:
                 resp.raise_for_status()
                 out = _mymemory_parse(resp)
                 if out:
+                    _cache_translate_put("mymemory", text, out)
                     return out
                 break
             except RuntimeError:
@@ -138,6 +180,150 @@ def _translate_mymemory(text: str) -> str:
             except (json.JSONDecodeError, KeyError, ValueError):
                 break
     return "(无翻译结果)"
+
+
+def _parse_google_clients5_payload(data: object) -> str:
+    """解析 clients5.google.com translate_a/t 返回的 JSON（多为 [[译文, 源语言], ...]）。"""
+    if isinstance(data, str):
+        return data.strip()
+    if not isinstance(data, list):
+        return ""
+    parts: list[str] = []
+    for row in data:
+        if isinstance(row, (list, tuple)) and row:
+            cell = row[0]
+            if isinstance(cell, str) and cell:
+                parts.append(cell)
+        elif isinstance(row, str) and row:
+            parts.append(row)
+    return "".join(parts).strip()
+
+
+def _translate_google_clients5(text: str) -> str:
+    """Google 另一公开入口（clients5），与 translate.googleapis.com 不同主机，便于并发择优。"""
+    hit = _cache_translate_get("google_c5", text)
+    if hit is not None:
+        return hit
+    encoded = quote(text, safe="")
+    url = (
+        "https://clients5.google.com/translate_a/t"
+        f"?client=dict-chrome-ex&sl=auto&tl=zh-CN&q={encoded}"
+    )
+    for attempt in range(TRANSLATE_RETRIES):
+        try:
+            resp = requests.get(url, timeout=TRANSLATE_TIMEOUT, headers=HTTP_HEADERS)
+            resp.raise_for_status()
+            data = json.loads(resp.text)
+            translated = _parse_google_clients5_payload(data)
+            out = translated if translated else "(无翻译结果)"
+            if out != "(无翻译结果)":
+                _cache_translate_put("google_c5", text, out)
+            return out
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+            if attempt + 1 < TRANSLATE_RETRIES:
+                time.sleep(0.75 * (attempt + 1))
+                continue
+            raise
+        except (json.JSONDecodeError, requests.exceptions.HTTPError):
+            return "(无翻译结果)"
+
+
+def _translate_lingva_mirror(text: str, base: str) -> str:
+    """Lingva GET /api/v1/auto/zh/{query}，与 google 直连不同，部分网络下仍可访问。"""
+    shared = _cache_translate_get("lingva", text)
+    if shared is not None:
+        return shared
+    seg = quote(text, safe="")
+    if len(seg) > 1400:
+        return "(无翻译结果)"
+    url = f"{base.rstrip('/')}/api/v1/auto/zh/{seg}"
+    for attempt in range(TRANSLATE_RETRIES):
+        try:
+            resp = requests.get(url, timeout=TRANSLATE_TIMEOUT, headers=HTTP_HEADERS)
+            resp.raise_for_status()
+            data = resp.json()
+            if not isinstance(data, dict):
+                return "(无翻译结果)"
+            out = (data.get("translation") or "").strip()
+            if not out:
+                return "(无翻译结果)"
+            _cache_translate_put("lingva", text, out)
+            return out
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+            if attempt + 1 < TRANSLATE_RETRIES:
+                time.sleep(0.75 * (attempt + 1))
+                continue
+            return "(无翻译结果)"
+        except (json.JSONDecodeError, requests.exceptions.RequestException, ValueError, TypeError):
+            return "(无翻译结果)"
+    return "(无翻译结果)"
+
+
+def _translate_parallel_race_zh(text: str) -> tuple[str, str | None]:
+    """
+    同时请求多条免费线路，谁先返回有效中文译文即用谁（其余请求在后台自然结束）。
+    命中任一引擎的成功缓存时直接返回，不发起网络请求。
+    """
+    for key in ("google", "google_c5", "mymemory", "lingva"):
+        hit = _cache_translate_get(key, text)
+        if hit is not None:
+            return hit, None
+
+    max_workers = min(32, 3 + len(LINGVA_BASES))
+    executor = ThreadPoolExecutor(max_workers=max_workers)
+    future_to_label: dict[object, str] = {}
+    try:
+        fg = executor.submit(_translate_google_gtx, text)
+        future_to_label[fg] = "Google"
+        fc = executor.submit(_translate_google_clients5, text)
+        future_to_label[fc] = "Google（clients5）"
+        fm = executor.submit(_translate_mymemory, text)
+        future_to_label[fm] = "MyMemory"
+        for base in LINGVA_BASES:
+            host = base.split("//", 1)[-1].split("/", 1)[0]
+            fl = executor.submit(_translate_lingva_mirror, text, base)
+            future_to_label[fl] = f"Lingva（{host}）"
+
+        errors: list[BaseException] = []
+        for fut in as_completed(future_to_label):
+            exn = fut.exception()
+            if exn is not None:
+                errors.append(exn)
+                continue
+            out = fut.result()
+            if out and out != "(无翻译结果)":
+                label = future_to_label[fut]
+                return out, f"（{label} 最快返回）"
+        if errors:
+            for err in errors:
+                if isinstance(err, RuntimeError):
+                    raise err
+            raise errors[0]
+        return "(无翻译结果)", None
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
+def _format_translate_failure(exc: BaseException) -> str:
+    raw = str(exc)
+    low = raw.lower()
+    if (
+        "failed to resolve" in low
+        or "getaddrinfo failed" in low
+        or "nameresolutionerror" in low
+        or "name resolution" in low
+        or "name or service not known" in low
+    ):
+        return (
+            "部分翻译线路 DNS 解析失败（常见于国内网络）。可改用「仅 MyMemory」以省并发；"
+            "若使用自动竞速，请检查代理/VPN 是否对 Python 生效。"
+        )
+    if isinstance(exc, requests.exceptions.RequestException):
+        if len(raw) > 260:
+            return f"翻译请求失败（{type(exc).__name__}）：{raw[:260]}…"
+        return f"翻译请求失败：{raw}"
+    return raw if len(raw) <= 400 else f"{raw[:400]}…"
+
 
 # 界面主题（与 vocab_review 一致）
 UI_BG = "#eef1f6"
@@ -155,6 +341,8 @@ UI_FLOAT_FG = "#f1f5f9"
 UI_FLOAT_MUTED = "#94a3b8"
 UI_FLOAT_BTN = "#6366f1"
 UI_FLOAT_BTN_H = "#4f46e5"
+UI_CURSOR_STATUS_BG = "#0f172a"
+UI_CURSOR_STATUS_FG = "#e2e8f0"
 
 FONT_FAMILY = "Microsoft YaHei UI"
 
@@ -183,11 +371,18 @@ class TranslatorApp:
 
         self._enabled_lock = threading.Lock()
         self._translate_enabled = True
+        self._ocr_lock = threading.Lock()
+        self._ocr_running = False
+        self._ocr_langs_cache: set[str] | None = None
 
         self.floating_win: tk.Toplevel | None = None
         self.floating_label: tk.Label | None = None
         self.floating_save_btn: tk.Button | None = None
         self.floating_timer_id: str | None = None
+        self.cursor_status_win: tk.Toplevel | None = None
+        self.cursor_status_label: tk.Label | None = None
+        self.cursor_status_timer_id: str | None = None
+        self.cursor_status_follow_id: str | None = None
         self.last_floating_msg = ""
         self._floating_original = ""
         self._floating_translated = ""
@@ -324,6 +519,27 @@ class TranslatorApp:
         mod_vk = {"ctrl": VK_CTRL, "tab": VK_TAB, "shift": VK_SHIFT, "alt": VK_ALT}[mod]
         return self._is_down(mod_vk) and self._is_down(key_vk)
 
+    def _tab_mod_key_fire_edge(self, combo: str, prev_tab: bool, prev_key: bool) -> tuple[bool, bool, bool]:
+        """
+        Tab+X 组合：不要求同一轮询里两键同时按下。
+        支持先 Tab 后按 X、先 X 后 Tab、或同时按下，避免「要掐得很准才触发」。
+        返回 (本周期是否应触发一次, 新的 prev_tab, 新的 prev_key)。
+        """
+        parsed = self._parse_hotkey(combo)
+        if parsed is None or parsed[0] != "tab":
+            return False, False, False
+        key_vk = self._vk_from_key_token(parsed[1])
+        if key_vk is None:
+            return False, False, False
+        t = self._is_down(VK_TAB)
+        k = self._is_down(key_vk)
+        fire = (
+            (k and not prev_key and t)
+            or (t and not prev_tab and k)
+            or ((t and k) and not (prev_tab and prev_key))
+        )
+        return fire, t, k
+
     def _hotkey_label(self, key: str) -> str:
         parsed = self._parse_hotkey(self.hotkeys.get(key, ""))
         if parsed is None:
@@ -371,7 +587,32 @@ class TranslatorApp:
             src = self.translate_source_var.get()
         if src == "mymemory":
             return _translate_mymemory(text)
-        return _translate_google_gtx(text)
+        return _translate_parallel_race_zh(text)[0]
+
+    def _set_status_safe(self, msg: str) -> None:
+        if self.root is None:
+            return
+
+        def apply() -> None:
+            if self.status_var is not None:
+                self.status_var.set(msg)
+
+        self.root.after(0, apply)
+
+    def _translate_primary_source(self) -> str:
+        src = "google"
+        if self.translate_source_var is not None:
+            try:
+                src = self.translate_source_var.get()
+            except tk.TclError:
+                src = "google"
+        return src
+
+    def _translate_resilient(self, text: str) -> tuple[str, str | None]:
+        """选 Google 时：多线路并发，谁先返回有效译文用谁。MyMemory 模式仍为单接口。"""
+        if self._translate_primary_source() == "mymemory":
+            return _translate_mymemory(text), None
+        return _translate_parallel_race_zh(text)
 
     def get_cursor_pos(self) -> tuple[int, int]:
         point = wintypes.POINT()
@@ -499,12 +740,124 @@ class TranslatorApp:
             self.floating_win.after_cancel(self.floating_timer_id)
         self.floating_timer_id = self.floating_win.after(duration_ms, self.floating_win.withdraw)
 
-    def _ui_show_result(self, original: str, result: str) -> None:
+    def _show_cursor_status_near_cursor(self, msg: str, *, duration_ms: int | None = None) -> None:
+        if self.root is None:
+            return
+        if self.floating_var is not None and not self.floating_var.get():
+            return
+        text = self.clean_text(msg)
+        if not text:
+            return
+        if self.cursor_status_win is None:
+            top = tk.Toplevel(self.root)
+            top.overrideredirect(True)
+            top.attributes("-topmost", True)
+            top.attributes("-alpha", 0.92)
+            top.configure(bg=UI_CURSOR_STATUS_BG, highlightbackground="#334155", highlightthickness=1)
+            lbl = tk.Label(
+                top,
+                text=text,
+                justify="left",
+                anchor="w",
+                bg=UI_CURSOR_STATUS_BG,
+                fg=UI_CURSOR_STATUS_FG,
+                padx=8,
+                pady=5,
+                font=tkfont.Font(family=FONT_FAMILY, size=9, weight="bold"),
+            )
+            lbl.pack(fill="both", expand=True)
+            self.cursor_status_win = top
+            self.cursor_status_label = lbl
+        else:
+            assert self.cursor_status_label is not None
+            self.cursor_status_label.configure(text=text)
+
+        assert self.cursor_status_win is not None
+        self.cursor_status_win.update_idletasks()
+        w = max(100, self.cursor_status_win.winfo_reqwidth())
+        h = max(26, self.cursor_status_win.winfo_reqheight())
+        cx, cy = self.get_cursor_pos()
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        x = min(max(8, cx + 14), max(8, sw - w - 8))
+        y = min(max(8, cy + 18), max(8, sh - h - 8))
+        self.cursor_status_win.geometry(f"{w}x{h}+{x}+{y}")
+        self.cursor_status_win.deiconify()
+        self.cursor_status_win.lift()
+
+        if self.cursor_status_timer_id is not None:
+            self.cursor_status_win.after_cancel(self.cursor_status_timer_id)
+            self.cursor_status_timer_id = None
+        self._start_cursor_status_follow()
+        if duration_ms is not None:
+            self.cursor_status_timer_id = self.cursor_status_win.after(duration_ms, self._hide_cursor_status)
+
+    def _start_cursor_status_follow(self) -> None:
+        if self.cursor_status_win is None or self.root is None:
+            return
+        if self.cursor_status_follow_id is not None:
+            try:
+                self.cursor_status_win.after_cancel(self.cursor_status_follow_id)
+            except Exception:
+                pass
+            self.cursor_status_follow_id = None
+
+        def tick() -> None:
+            if self.cursor_status_win is None or self.root is None:
+                self.cursor_status_follow_id = None
+                return
+            if not self.cursor_status_win.winfo_viewable():
+                self.cursor_status_follow_id = None
+                return
+            try:
+                self.cursor_status_win.update_idletasks()
+                w = max(100, self.cursor_status_win.winfo_reqwidth())
+                h = max(26, self.cursor_status_win.winfo_reqheight())
+                cx, cy = self.get_cursor_pos()
+                sw = self.root.winfo_screenwidth()
+                sh = self.root.winfo_screenheight()
+                x = min(max(8, cx + 14), max(8, sw - w - 8))
+                y = min(max(8, cy + 18), max(8, sh - h - 8))
+                self.cursor_status_win.geometry(f"{w}x{h}+{x}+{y}")
+            except Exception:
+                self.cursor_status_follow_id = None
+                return
+            self.cursor_status_follow_id = self.cursor_status_win.after(70, tick)
+
+        self.cursor_status_follow_id = self.cursor_status_win.after(70, tick)
+
+    def _hide_cursor_status(self) -> None:
+        if self.cursor_status_win is None:
+            return
+        if self.cursor_status_follow_id is not None:
+            try:
+                self.cursor_status_win.after_cancel(self.cursor_status_follow_id)
+            except Exception:
+                pass
+            self.cursor_status_follow_id = None
+        if self.cursor_status_timer_id is not None:
+            try:
+                self.cursor_status_win.after_cancel(self.cursor_status_timer_id)
+            except Exception:
+                pass
+            self.cursor_status_timer_id = None
+        try:
+            self.cursor_status_win.withdraw()
+        except Exception:
+            pass
+
+    def _set_cursor_status_safe(self, msg: str, *, duration_ms: int | None = None) -> None:
+        if self.root is None:
+            return
+        self.root.after(0, lambda m=msg, d=duration_ms: self._show_cursor_status_near_cursor(m, duration_ms=d))
+
+    def _ui_show_result(self, original: str, result: str, *, save_translation: str | None = None) -> None:
+        stored = save_translation if save_translation is not None else result
         with self._last_lock:
             self._last_original = original
-            self._last_translated = result
+            self._last_translated = stored
         self._append_log(original, result)
-        self._push_recent_translation(original, result)
+        self._push_recent_translation(original, stored)
         self._show_floating_near_cursor(original, result)
 
     def _ui_show_error(self, original: str, err: str) -> None:
@@ -615,6 +968,10 @@ class TranslatorApp:
         if not text:
             if self.root is not None:
                 self.root.after(0, lambda h=no_text_hint: self._ui_show_error("提示", h))
+                self._set_cursor_status_safe("未检测到可翻译文本", duration_ms=1300)
+                self._set_status_safe(
+                    self._status_enabled_text() if self._is_translate_enabled() else self._status_disabled_text()
+                )
             return
         if len(text) > MAX_TEXT_LENGTH:
             text = text[:MAX_TEXT_LENGTH] + "..."
@@ -627,13 +984,31 @@ class TranslatorApp:
                     speak_vol = 100
             threading.Thread(target=self._speak_english_text, args=(text, speak_vol), daemon=True).start()
         try:
-            translated = self.translate(text)
-            print(f"[{time.strftime('%H:%M:%S')}] {text} => {translated}")
+            self._set_cursor_status_safe("并发翻译中…")
+            translated, fb_note = self._translate_resilient(text)
+            display = f"{translated}\n{fb_note}" if fb_note else translated
+            print(f"[{time.strftime('%H:%M:%S')}] {text} => {display}")
             if self.root is not None:
-                self.root.after(0, lambda t=text, tr=translated: self._ui_show_result(t, tr))
+
+                def _done() -> None:
+                    self._ui_show_result(text, display, save_translation=translated)
+                    self._show_cursor_status_near_cursor("翻译完成", duration_ms=1000)
+                    if self.status_var is not None:
+                        self.status_var.set(
+                            self._status_enabled_text() if self._is_translate_enabled() else self._status_disabled_text()
+                        )
+
+                self.root.after(0, _done)
         except Exception as exc:
             if self.root is not None:
-                self.root.after(0, lambda t=text, e=exc: self._ui_show_error(t, f"翻译失败: {e}"))
+                self.root.after(
+                    0,
+                    lambda t=text, e=exc: self._ui_show_error(t, _format_translate_failure(e)),
+                )
+                self._set_cursor_status_safe("翻译失败", duration_ms=1500)
+                self._set_status_safe(
+                    self._status_enabled_text() if self._is_translate_enabled() else self._status_disabled_text()
+                )
 
     @staticmethod
     def _is_likely_english(text: str) -> bool:
@@ -668,6 +1043,7 @@ class TranslatorApp:
     def _do_translate_job(self) -> None:
         if not self._is_translate_enabled():
             return
+        self._set_cursor_status_safe("读取划词内容…")
         text = self.copy_selected_text()
         self._translate_text_job(text, no_text_hint=f"未检测到选中文本，请先划词再按 {self._hotkey_label('translate')}")
 
@@ -693,68 +1069,109 @@ class TranslatorApp:
     def _do_screen_ocr_translate_job(self, bbox: tuple[int, int, int, int]) -> None:
         if not self._is_translate_enabled():
             return
-        if ImageGrab is None or pytesseract is None:
-            if self.root is not None:
-                self.root.after(
-                    0,
-                    lambda: self._ui_show_error(
-                        "OCR 不可用",
-                        "缺少 OCR 依赖：请安装 pillow 与 pytesseract，并确保系统已安装 Tesseract-OCR。",
-                    ),
-                )
-            return
-        tesseract_bin = self._pick_tesseract_binary()
-        if tesseract_bin:
-            pytesseract.pytesseract.tesseract_cmd = tesseract_bin
-        tessdata_dir = ""
-        lang_files: set[str] = set()
-        if tesseract_bin:
-            maybe_dir = os.path.join(os.path.dirname(tesseract_bin), "tessdata")
-            if os.path.isdir(maybe_dir):
-                tessdata_dir = maybe_dir
-                for fn in os.listdir(maybe_dir):
-                    if fn.endswith(".traineddata"):
-                        lang_files.add(fn.replace(".traineddata", ""))
-        langs = OCR_LANG
+        with self._ocr_lock:
+            if self._ocr_running:
+                self._set_cursor_status_safe("OCR 正在进行中，请稍候…", duration_ms=1300)
+                self._set_status_safe("OCR 正在进行中，请稍候…")
+                return
+            self._ocr_running = True
+        self._set_cursor_status_safe("OCR 准备中…")
         try:
-            available = set(pytesseract.get_languages())
-        except Exception:
-            available = set()
-        known = available or lang_files
-        if known:
-            if {"eng", "chi_sim"}.issubset(known):
-                langs = "eng+chi_sim"
-            elif "eng" in known:
-                langs = "eng"
-            elif "chi_sim" in known:
-                langs = "chi_sim"
-            else:
-                langs = next(iter(known))
-
-        old_prefix = os.environ.get("TESSDATA_PREFIX")
-        try:
-            if tessdata_dir:
-                # 强制覆盖错误的全局 TESSDATA_PREFIX（例如指向 E:\tes）
-                os.environ["TESSDATA_PREFIX"] = tessdata_dir
-            image = ImageGrab.grab(bbox=bbox, all_screens=True)
-            text = pytesseract.image_to_string(image, lang=langs)
-        except Exception as exc:
-            if self.root is not None:
-                msg = str(exc)
-                if "TESSDATA_PREFIX" in msg or "couldn't load any languages" in msg.lower():
-                    msg = (
-                        "OCR 失败：未找到可用语言包。请安装 Tesseract 的 eng/chi_sim 语言文件，"
-                        "或修正 TESSDATA_PREFIX 到 tessdata 目录。"
+            if ImageGrab is None or pytesseract is None:
+                if self.root is not None:
+                    self.root.after(
+                        0,
+                        lambda: self._ui_show_error(
+                            "OCR 不可用",
+                            "缺少 OCR 依赖：请安装 pillow 与 pytesseract，并确保系统已安装 Tesseract-OCR。",
+                        ),
                     )
-                detail = f"[tesseract={tesseract_bin or '未找到'} | tessdata={tessdata_dir or '未找到'} | lang={langs}]"
-                self.root.after(0, lambda e=f"{msg}\n{detail}": self._ui_show_error("OCR 失败", e))
-            return
+                    self._set_cursor_status_safe("OCR 不可用", duration_ms=1500)
+                return
+            tesseract_bin = self._pick_tesseract_binary()
+            if tesseract_bin:
+                pytesseract.pytesseract.tesseract_cmd = tesseract_bin
+            tessdata_dir = ""
+            lang_files: set[str] = set()
+            if tesseract_bin:
+                maybe_dir = os.path.join(os.path.dirname(tesseract_bin), "tessdata")
+                if os.path.isdir(maybe_dir):
+                    tessdata_dir = maybe_dir
+                    for fn in os.listdir(maybe_dir):
+                        if fn.endswith(".traineddata"):
+                            lang_files.add(fn.replace(".traineddata", ""))
+            langs = OCR_LANG
+            if self._ocr_langs_cache is None:
+                try:
+                    self._ocr_langs_cache = set(pytesseract.get_languages())
+                except Exception:
+                    self._ocr_langs_cache = set()
+            known = self._ocr_langs_cache or lang_files
+            if known:
+                if {"eng", "chi_sim"}.issubset(known):
+                    langs = "eng+chi_sim"
+                elif "eng" in known:
+                    langs = "eng"
+                elif "chi_sim" in known:
+                    langs = "chi_sim"
+                else:
+                    langs = next(iter(known))
+
+            self._set_status_safe("OCR：正在截取屏幕…")
+            self._set_cursor_status_safe("OCR 截图中…")
+            old_prefix = os.environ.get("TESSDATA_PREFIX")
+            image = None
+            try:
+                if tessdata_dir:
+                    # 强制覆盖错误的全局 TESSDATA_PREFIX（例如指向 E:\tes）
+                    os.environ["TESSDATA_PREFIX"] = tessdata_dir
+                image = ImageGrab.grab(bbox=bbox, all_screens=True)
+                try:
+                    w, h = image.size
+                    if w > 0 and h > 0:
+                        pixels = w * h
+                        if pixels > OCR_MAX_PIXELS:
+                            scale = (OCR_MAX_PIXELS / float(pixels)) ** 0.5
+                            nw = max(1, int(w * scale))
+                            nh = max(1, int(h * scale))
+                            image = image.resize((nw, nh))
+                except Exception:
+                    pass
+                self._set_status_safe("OCR：正在识别文字（区域越大可能越慢，请稍候）…")
+                self._set_cursor_status_safe("OCR 识别中…")
+                text = pytesseract.image_to_string(image, lang=langs)
+            except Exception as exc:
+                self._set_status_safe(
+                    self._status_enabled_text() if self._is_translate_enabled() else self._status_disabled_text()
+                )
+                if self.root is not None:
+                    msg = str(exc)
+                    if "TESSDATA_PREFIX" in msg or "couldn't load any languages" in msg.lower():
+                        msg = (
+                            "OCR 失败：未找到可用语言包。请安装 Tesseract 的 eng/chi_sim 语言文件，"
+                            "或修正 TESSDATA_PREFIX 到 tessdata 目录。"
+                        )
+                    detail = f"[tesseract={tesseract_bin or '未找到'} | tessdata={tessdata_dir or '未找到'} | lang={langs}]"
+                    self.root.after(0, lambda e=f"{msg}\n{detail}": self._ui_show_error("OCR 失败", e))
+                self._set_cursor_status_safe("OCR 失败", duration_ms=1500)
+                return
+            finally:
+                if image is not None:
+                    try:
+                        image.close()
+                    except Exception:
+                        pass
+                    image = None
+                if old_prefix is None:
+                    os.environ.pop("TESSDATA_PREFIX", None)
+                else:
+                    os.environ["TESSDATA_PREFIX"] = old_prefix
+            self._set_status_safe("OCR：正在翻译…")
+            self._set_cursor_status_safe("并发翻译中…")
+            self._translate_text_job(text, no_text_hint="截图区域未识别到文字，请重试更清晰区域")
         finally:
-            if old_prefix is None:
-                os.environ.pop("TESSDATA_PREFIX", None)
-            else:
-                os.environ["TESSDATA_PREFIX"] = old_prefix
-        self._translate_text_job(text, no_text_hint="截图区域未识别到文字，请重试更清晰区域")
+            with self._ocr_lock:
+                self._ocr_running = False
 
     def _pick_tesseract_binary(self) -> str | None:
         """
@@ -788,6 +1205,63 @@ class TranslatorApp:
         best = max(candidates, key=lang_score)
         return best
 
+    def _win32_force_foreground_hwnd(self, hwnd: int) -> None:
+        """
+        将本进程窗口推到 Windows 前台。
+        在其它应用拥有焦点时，仅靠 Tk 的 focus_force 往往无效；需 AttachThreadInput 配合 SetForegroundWindow。
+        """
+        if hwnd <= 0:
+            return
+        user32 = self.user32
+        kernel32 = self.kernel32
+        SW_RESTORE = 9
+        target = wintypes.HWND(hwnd)
+        try:
+            user32.ShowWindow(target, SW_RESTORE)
+        except Exception:
+            pass
+        fg = user32.GetForegroundWindow()
+        if not fg:
+            user32.SetForegroundWindow(target)
+            user32.BringWindowToTop(target)
+            return
+        cur_tid = kernel32.GetCurrentThreadId()
+        proc = wintypes.DWORD(0)
+        fg_tid = user32.GetWindowThreadProcessId(fg, ctypes.byref(proc))
+        if fg_tid == 0 or fg_tid == cur_tid:
+            user32.SetForegroundWindow(target)
+            user32.BringWindowToTop(target)
+            return
+        user32.AttachThreadInput(fg_tid, cur_tid, True)
+        try:
+            user32.SetForegroundWindow(target)
+            user32.BringWindowToTop(target)
+        finally:
+            user32.AttachThreadInput(fg_tid, cur_tid, False)
+
+    def _win32_activate_snip_overlay(self, overlay: tk.Toplevel) -> None:
+        """从后台热键打开截屏层时，把主窗与遮罩一并抢到前台，避免必须再点一次主界面。"""
+        if self.root is None:
+            return
+        try:
+            self.root.deiconify()
+        except tk.TclError:
+            pass
+        self.root.update_idletasks()
+        overlay.update_idletasks()
+        try:
+            self._win32_force_foreground_hwnd(int(self.root.winfo_id()))
+        except Exception:
+            pass
+        try:
+            self._win32_force_foreground_hwnd(int(overlay.winfo_id()))
+        except Exception:
+            pass
+        try:
+            overlay.focus_force()
+        except tk.TclError:
+            pass
+
     def _snip_cancel(self, msg: str | None = None) -> None:
         if self._snip_overlay is not None:
             try:
@@ -810,90 +1284,163 @@ class TranslatorApp:
         self._snip_busy = True
         self.status_var and self.status_var.set("截图模式：拖拽选择区域，ESC 取消")
 
-        overlay = tk.Toplevel(self.root)
-        overlay.attributes("-fullscreen", True)
-        overlay.attributes("-topmost", True)
-        overlay.attributes("-alpha", 0.22)
-        overlay.configure(bg="black")
-        overlay.overrideredirect(True)
+        overlay: tk.Toplevel | None = None
+        try:
+            overlay = tk.Toplevel(self.root)
+            self._snip_overlay = overlay
+            # Win32：必须先全屏再 overrideredirect，否则会 TclError: can't set fullscreen ... override-redirect flag is set
+            overlay.attributes("-fullscreen", True)
+            overlay.overrideredirect(True)
+            overlay.configure(bg=SNIP_OVERLAY_CANVAS_BG)
 
-        canvas = tk.Canvas(overlay, bg="black", highlightthickness=0, cursor="crosshair")
-        canvas.pack(fill="both", expand=True)
-        hint = "拖拽框选要 OCR 翻译的区域（回车确认当前框选 / ESC 取消）"
-        canvas.create_text(18, 20, text=hint, fill="#ffffff", anchor="w", font=(FONT_FAMILY, 11, "bold"))
+            canvas = tk.Canvas(
+                overlay,
+                bg=SNIP_OVERLAY_CANVAS_BG,
+                highlightthickness=0,
+                cursor="crosshair",
+            )
+            canvas.pack(fill="both", expand=True)
+            hint = "拖拽框选要 OCR 翻译的区域（松开鼠标确认 / ESC 取消）"
+            canvas.create_text(18, 20, text=hint, fill="#f8fafc", anchor="w", font=(FONT_FAMILY, 12, "bold"))
 
-        self._snip_overlay = overlay
-        self._snip_canvas = canvas
-        self._snip_start = None
-        self._snip_rect_id = None
-        self._snip_info_id = canvas.create_text(
-            18,
-            48,
-            text="",
-            fill="#93c5fd",
-            anchor="w",
-            font=(FONT_FAMILY, 10, "bold"),
-        )
+            def _snip_on_map(_event: tk.Event | None = None) -> None:
+                try:
+                    overlay.attributes("-alpha", SNIP_OVERLAY_ALPHA)
+                except tk.TclError:
+                    pass
 
-        def on_press(event: tk.Event) -> None:
-            self._snip_start = (event.x_root, event.y_root)
-            if self._snip_rect_id is not None:
-                canvas.delete(self._snip_rect_id)
-            self._snip_rect_id = canvas.create_rectangle(
-                event.x,
-                event.y,
-                event.x,
-                event.y,
-                outline="#38bdf8",
-                width=3,
-                fill="#38bdf8",
-                stipple="gray50",
+            overlay.bind("<Map>", _snip_on_map)
+
+            self._snip_canvas = canvas
+            self._snip_start = None
+            self._snip_rect_id = None
+            self._snip_info_id = canvas.create_text(
+                18,
+                48,
+                text="",
+                fill="#93c5fd",
+                anchor="w",
+                font=(FONT_FAMILY, 10, "bold"),
             )
 
-        def on_drag(event: tk.Event) -> None:
-            if self._snip_start is None or self._snip_rect_id is None:
-                return
-            x0, y0 = self._snip_start
-            x1, y1 = event.x_root, event.y_root
-            canvas.coords(
-                self._snip_rect_id,
-                x0 - overlay.winfo_rootx(),
-                y0 - overlay.winfo_rooty(),
-                event.x,
-                event.y,
-            )
-            w = abs(x1 - x0)
-            h = abs(y1 - y0)
-            if self._snip_info_id is not None:
-                canvas.itemconfigure(self._snip_info_id, text=f"区域大小：{w} × {h}")
+            def on_press(event: tk.Event) -> None:
+                self._snip_start = (event.x_root, event.y_root)
+                if self._snip_rect_id is not None:
+                    canvas.delete(self._snip_rect_id)
+                self._snip_rect_id = canvas.create_rectangle(
+                    event.x,
+                    event.y,
+                    event.x,
+                    event.y,
+                    outline="#38bdf8",
+                    width=3,
+                    fill="#38bdf8",
+                    stipple="gray50",
+                )
 
-        def on_release(event: tk.Event) -> None:
-            if self._snip_start is None:
-                return
-            x0, y0 = self._snip_start
-            x1, y1 = event.x_root, event.y_root
-            left, top = min(x0, x1), min(y0, y1)
-            right, bottom = max(x0, x1), max(y0, y1)
-            if right - left < 6 or bottom - top < 6:
-                self._snip_cancel("截图区域太小，已取消")
-                return
-            self._snip_cancel("OCR 识别中…")
-            threading.Thread(target=self._do_screen_ocr_translate_job, args=((left, top, right, bottom),), daemon=True).start()
+            def on_drag(event: tk.Event) -> None:
+                if self._snip_start is None or self._snip_rect_id is None:
+                    return
+                x0, y0 = self._snip_start
+                x1, y1 = event.x_root, event.y_root
+                canvas.coords(
+                    self._snip_rect_id,
+                    x0 - overlay.winfo_rootx(),
+                    y0 - overlay.winfo_rooty(),
+                    event.x,
+                    event.y,
+                )
+                w = abs(x1 - x0)
+                h = abs(y1 - y0)
+                if self._snip_info_id is not None:
+                    canvas.itemconfigure(self._snip_info_id, text=f"区域大小：{w} × {h}")
 
-        overlay.bind("<Escape>", lambda e: self._snip_cancel("已取消截图"))
-        canvas.bind("<ButtonPress-1>", on_press)
-        canvas.bind("<B1-Motion>", on_drag)
-        canvas.bind("<ButtonRelease-1>", on_release)
-        overlay.focus_force()
+            def on_release(event: tk.Event) -> None:
+                if self._snip_start is None:
+                    return
+                x0, y0 = self._snip_start
+                x1, y1 = event.x_root, event.y_root
+                left, top = min(x0, x1), min(y0, y1)
+                right, bottom = max(x0, x1), max(y0, y1)
+                if right - left < 6 or bottom - top < 6:
+                    self._snip_cancel("截图区域太小，已取消")
+                    return
+                self._snip_cancel("OCR 识别中…")
+                threading.Thread(target=self._do_screen_ocr_translate_job, args=((left, top, right, bottom),), daemon=True).start()
+
+            overlay.bind("<Escape>", lambda e: self._snip_cancel("已取消截图"))
+            canvas.bind("<ButtonPress-1>", on_press)
+            canvas.bind("<B1-Motion>", on_drag)
+            canvas.bind("<ButtonRelease-1>", on_release)
+            self._finalize_snip_overlay(overlay)
+            self._win32_activate_snip_overlay(overlay)
+        except Exception as exc:
+            if overlay is not None:
+                try:
+                    overlay.destroy()
+                except Exception:
+                    pass
+            self._snip_overlay = None
+            self._snip_canvas = None
+            self._snip_start = None
+            self._snip_rect_id = None
+            self._snip_info_id = None
+            self._snip_busy = False
+            if self.status_var is not None:
+                self.status_var.set(f"截图模式启动失败：{exc}")
+
+    def _finalize_snip_overlay(self, overlay: tk.Toplevel) -> None:
+        """统一遮罩视觉：置顶 + 透明度在窗口映射后重复设置，减轻 Win32 上忽明忽暗。"""
+        overlay.update_idletasks()
+        try:
+            overlay.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        for _ in range(2):
+            try:
+                overlay.attributes("-alpha", SNIP_OVERLAY_ALPHA)
+            except tk.TclError:
+                break
+            overlay.update_idletasks()
+        try:
+            overlay.lift(self.root)
+        except tk.TclError:
+            overlay.lift()
 
     def _tab_combo_loop(self) -> None:
         prev_translate = False
         prev_snip = False
+        prev_snip_tab = False
+        prev_snip_key = False
         prev_save = False
+        prev_save_tab = False
+        prev_save_key = False
         while not self._closing:
             pressed_translate = self._is_hotkey_pressed(self.hotkeys.get("translate", ""))
-            pressed_snip = self._is_hotkey_pressed(self.hotkeys.get("snip", ""))
-            pressed_save = self._is_hotkey_pressed(self.hotkeys.get("save_last", ""))
+
+            combo_snip = self.hotkeys.get("snip", "")
+            ps = self._parse_hotkey(combo_snip)
+            if ps and ps[0] == "tab":
+                fire_snip, prev_snip_tab, prev_snip_key = self._tab_mod_key_fire_edge(
+                    combo_snip, prev_snip_tab, prev_snip_key
+                )
+                pressed_snip = fire_snip
+            else:
+                pressed_snip = self._is_hotkey_pressed(combo_snip)
+                prev_snip_tab = False
+                prev_snip_key = False
+
+            combo_save = self.hotkeys.get("save_last", "")
+            pz = self._parse_hotkey(combo_save)
+            if pz and pz[0] == "tab":
+                fire_save, prev_save_tab, prev_save_key = self._tab_mod_key_fire_edge(
+                    combo_save, prev_save_tab, prev_save_key
+                )
+                pressed_save = fire_save
+            else:
+                pressed_save = self._is_hotkey_pressed(combo_save)
+                prev_save_tab = False
+                prev_save_key = False
 
             if pressed_translate and not prev_translate:
                 threading.Thread(target=self._do_translate_job, daemon=True).start()
@@ -905,7 +1452,7 @@ class TranslatorApp:
             prev_translate = pressed_translate
             prev_snip = pressed_snip
             prev_save = pressed_save
-            time.sleep(0.03)
+            time.sleep(0.008)
 
     def _load_vocab(self) -> list[dict]:
         try:
@@ -1099,14 +1646,14 @@ class TranslatorApp:
         ).pack(side="left", padx=(0, 18))
         tk.Radiobutton(
             src_row,
-            text="Google（质量通常更好，国内多数网络需代理）",
+            text="自动竞速（Google 双线路 + MyMemory + Lingva 镜像，谁先成功用谁）",
             variable=self.translate_source_var,
             value="google",
             **rb_kw,
         ).pack(side="left")
         tk.Label(
             src_wrap,
-            text="备选接口来自 api.mymemory.translated.net，用量大时可能提示配额用尽。",
+            text="竞速含 translate.googleapis.com、clients5.google.com、MyMemory、Lingva；MyMemory 用量大时可能提示配额用尽。",
             bg=UI_CARD,
             fg=UI_TEXT_MUTED,
             font=tkfont.Font(family=FONT_FAMILY, size=8),

@@ -398,5 +398,541 @@
     "example_zh": "海岸边崎岖的悬崖提供了令人惊叹的海景。",
     "score": 50.0,
     "reviews": 0
+  },
+  {
+    "word": "childish.",
+    "meaning": "幼稚。",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "illustrations",
+    "meaning": "插图",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "cave.",
+    "meaning": "洞穴。",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "animated",
+    "meaning": "动画",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "prehistoric",
+    "meaning": "史前",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "originally,",
+    "meaning": "原本",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "roam around",
+    "meaning": "胡逛",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "species",
+    "meaning": "物种",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "extinct.",
+    "meaning": "绝灭",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "mud",
+    "meaning": "淤泥",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "exact",
+    "meaning": "确切",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "procedure",
+    "meaning": "进程",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "precise",
+    "meaning": "精确",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "muddled",
+    "meaning": "糊涂",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "series",
+    "meaning": "系列",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "catastrophes,",
+    "meaning": "灾难，",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "Generally",
+    "meaning": "(无翻译结果)",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "civilisations",
+    "meaning": "文明",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "rites",
+    "meaning": "仪式",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "look kindly on",
+    "meaning": "善意地看着",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "observing",
+    "meaning": "观察",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "observations",
+    "meaning": "观察",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "was of daily importance",
+    "meaning": "具有日常重要性",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "astronomers",
+    "meaning": "天文学家",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "calendar",
+    "meaning": "日历",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "associated with",
+    "meaning": "与 相关联",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "phenomenon",
+    "meaning": "现象",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "held sway",
+    "meaning": "占据主导地位",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "formation",
+    "meaning": "形成",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "celestial",
+    "meaning": "天上的",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "comets.",
+    "meaning": "彗星。",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "evaporate",
+    "meaning": "蒸发",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "quite a few",
+    "meaning": "相当多",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "rectified",
+    "meaning": "已整顿",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "onwards",
+    "meaning": "以后",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "chief",
+    "meaning": "首席",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "authority",
+    "meaning": "权威",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "theory",
+    "meaning": "理论",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "Alongside this",
+    "meaning": "除了这个",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "in the form of",
+    "meaning": "形式为",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "proverbs",
+    "meaning": "谚语",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "contemporary",
+    "meaning": "当代的",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "meteorologists",
+    "meaning": "气象学家",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "instruments.",
+    "meaning": "仪器。",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "humidity",
+    "meaning": "湿度",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "thermometer",
+    "meaning": "温度计",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "atmospheric",
+    "meaning": "大气的 （Google 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "verified",
+    "meaning": "已验证 （Google 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "telegraph",
+    "meaning": "电报 （Google 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "collated",
+    "meaning": "整理的 （Google 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "put in charge of",
+    "meaning": "负责 （MyMemory 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "marching band",
+    "meaning": "军乐队军乐队 （MyMemory 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "regional",
+    "meaning": "区域的 （MyMemory 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "incentive",
+    "meaning": "激励 （MyMemory 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "council",
+    "meaning": "评议会 （MyMemory 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "carnival",
+    "meaning": "狂欢节 （MyMemory 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "aren't really up to it",
+    "meaning": "不是很能胜任 （MyMemory 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "came across",
+    "meaning": "遇到了 （MyMemory 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "getting involved",
+    "meaning": "参与 （MyMemory 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "I've got in mind.",
+    "meaning": "我已经想好了。 （MyMemory 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "parade",
+    "meaning": "示威游行 ,阅兵式 ;v.游行 ;n.游行 （MyMemory 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "atmosphere",
+    "meaning": "氛围 （MyMemory 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "persuade",
+    "meaning": "说服",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "cope with",
+    "meaning": "应付 （MyMemory 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "rehearse",
+    "meaning": "排练。",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "plausible",
+    "meaning": "合理的 （MyMemory 最快返回）",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
+  },
+  {
+    "word": "nightmare",
+    "meaning": "噩梦",
+    "example": "",
+    "example_zh": "",
+    "score": 50.0,
+    "reviews": 0
   }
 ]
